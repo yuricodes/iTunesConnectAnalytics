@@ -47,7 +47,9 @@ Itunes.prototype.executeRequest = function(task, callback) {
     uri: uri,
     headers: this.getHeaders(),
     timeout: 300000, //5 minutes
-    json: requestBody
+    json: requestBody,
+    proxy: this.options.proxy,
+    agent: this.options.agent
   }, function(error, response, body) {
     if (!response.hasOwnProperty('statusCode')) {
       error = new Error('iTunes Connect is not responding. The service may be temporarily offline.');
@@ -75,7 +77,9 @@ Itunes.prototype.login = function(username, password) {
       'accountName': username,
       'password': password,
       'rememberMe': false
-    }
+    },
+    proxy: this.options.proxy,
+    agent: this.options.agent
   }, function (error, response, body) { 
     self.handleLogin(error, response, body).then(r => { 
       self.options.successCallback(r)
@@ -109,32 +113,36 @@ Itunes.prototype.handleLogin = function(error, response, body) {
             }
             
             const headers = self.twoFactorHeaders()
-            request.get("https://idmsa.apple.com/appleauth/auth", {headers: headers}, function(error, response, body) {
-            if (error || !body) {
-              errorCallback(error)
-              return
-            }
-            body = JSON.parse(body)
-            // get devices
-            if (body.trustedDevices) {
-              self.options.twoFactor.trustedDevices = body.trustedDevices;
-            }
-            else if (body.trustedPhoneNumbers) {
-              self.options.twoFactor.trustedPhoneNumbers = body.trustedPhoneNumbers;
-            }
-            else {
-              // TODO: Send detailed error
-              errorCallback(null)
-              return
-            }
-            loginError.options = self.options;
-            var resultError = new Error("2fa")
-            resultError.loginError = loginError
-            
-            errorCallback(resultError)
-            return
-          })
-          return
+            request.get("https://idmsa.apple.com/appleauth/auth", {
+            	headers: headers,
+            	proxy: this.options.proxy,
+            	agent: this.options.agent
+            }, function(error, response, body) {
+	            if (error || !body) {
+	              errorCallback(error)
+	              return
+	            }
+	            body = JSON.parse(body)
+	            // get devices
+	            if (body.trustedDevices) {
+	              self.options.twoFactor.trustedDevices = body.trustedDevices;
+	            }
+	            else if (body.trustedPhoneNumbers) {
+	              self.options.twoFactor.trustedPhoneNumbers = body.trustedPhoneNumbers;
+	            }
+	            else {
+	              // TODO: Send detailed error
+	              errorCallback(null)
+	              return
+	            }
+	            loginError.options = self.options;
+	            var resultError = new Error("2fa")
+	            resultError.loginError = loginError
+	            
+	            errorCallback(resultError)
+	            return
+	          })
+	          return
         }
         
       }
@@ -147,6 +155,8 @@ Itunes.prototype.handleLogin = function(error, response, body) {
         url: 'https://olympus.itunes.apple.com/v1/session', //self.options.baseURL + "/WebObjects/iTunesConnect.woa",
         followRedirect: false,	//We can't follow redirects, otherwise we will "miss" the itCtx cookie
         headers: {Cookie: account},
+        proxy: this.options.proxy,
+        agent: this.options.agent
       }, function(error, response, body) {
         var cookies = response ? response.headers['set-cookie'] : null;
         
@@ -173,11 +183,14 @@ Itunes.prototype.handleLogin = function(error, response, body) {
 })
 }
 
+
 Itunes.prototype.requestCodeOnDevice = function (identifier) {
   const self = this
   return new Promise(function(resolve, reject){
     const headers = self.twoFactorHeaders()
-    request.put("https://idmsa.apple.com/appleauth/auth/verify/device/"+identifier+"/securitycode", {headers: headers}, function (error, response, body) {
+    request.put("https://idmsa.apple.com/appleauth/auth/verify/device/"+identifier+"/securitycode", {headers: headers,
+        proxy: this.options.proxy,
+        agent: this.options.agent}, function (error, response, body) {
     if (error) {
       reject(error)
       return
@@ -198,7 +211,9 @@ Itunes.prototype.changeProvider = function(providerId, callback) {
   }, function(error) {
     request.get({
       url: 'https://analytics.itunes.apple.com/analytics/api/v1/settings/provider/' + providerId,
-      headers: self.getHeaders()
+      headers: self.getHeaders(),
+      proxy: this.options.proxy,
+      agent: this.options.agent
     }, function(error, response, body) {
       //extract the account info cookie
       var myAccount = /myacinfo=.+?;/.exec(self._cookies);
@@ -245,6 +260,8 @@ Itunes.prototype.validateTwoFactor = function(securityCode, deviceIdentifier) {
       url = "https://idmsa.apple.com/appleauth/auth/verify/device/"+ deviceIdentifier +"/securitycode"
       params = {json: true, headers: headers, body:{code: securityCode}}
     }
+    params.proxy = self.options.proxy;
+    params.agent = self.options.agent;
     request.post(url, params, function(error, response, body) { 
       // 204 --> Good // 4xx bad (401)
       if (error || response.statusCode > 299) {
@@ -296,7 +313,9 @@ Itunes.prototype.getAPIURL = function(uri, callback) {
   }, function(error) {
     request.get({
       uri: uri,
-      headers: self.getHeaders()
+      headers: self.getHeaders(),
+      proxy: this.options.proxy,
+      agent: this.options.agent
     }, function(error, response, body) {
       if (!response.hasOwnProperty('statusCode')) {
         error = new Error('iTunes Connect is not responding. The service may be temporarily offline.');
